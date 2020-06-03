@@ -471,6 +471,7 @@ mod test {
     use std::fs::File;
     use std::fs::{create_dir, read_dir};
     use std::io::prelude::*;
+    use std::path::Path;
 
     fn try_convert(input: &str) -> String {
         let mut lexer = Lexer::new();
@@ -499,7 +500,7 @@ mod test {
     }
 
     #[test]
-    fn lua_to_lua() -> std::io::Result<()> {
+    fn lua_to_js() -> std::io::Result<()> {
         let lua_dir: &'static str = "./lua_tests";
         let tmp: &'static str = "./js_output";
         if let Err(_e) = read_dir(tmp) {
@@ -511,8 +512,9 @@ mod test {
             let entry = entry?;
             let file_name = entry.file_name();
             let name = file_name.to_str().unwrap();
+            let jsname = Path::new(&file_name).file_stem().unwrap().to_str().unwrap();
             let src = format!("{}/{}", lua_dir, name);
-            let dst = format!("{}/{}", tmp, name);
+            let dst = format!("{}/{}", tmp, format!("{}.js", jsname));
             println!("{}, {}", src, dst);
             convert_lua(&src, &dst)?;
         }
