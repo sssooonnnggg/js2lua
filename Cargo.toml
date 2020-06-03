@@ -1,8 +1,10 @@
 [package]
 name = "lua2js"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["sssooonnnggg <sssooonnnggg111@gmail.com>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 rslua = "0.2.4"

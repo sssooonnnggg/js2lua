@@ -1,4 +1,4 @@
 # lua2js
 
-Lua to JavaScript Transpiler written in Rust.
+Yet another Lua to JavaScript transpiler written in Rust.
 
