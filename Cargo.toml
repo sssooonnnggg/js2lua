@@ -1,0 +1,8 @@
+[package]
+name = "lua2js"
+version = "0.1.0"
+authors = ["sssooonnnggg <sssooonnnggg111@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rslua = "0.2.4"
