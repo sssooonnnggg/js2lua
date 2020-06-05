@@ -237,7 +237,7 @@ impl AstVisitor for Transpiler {
         self.append_space("let");
         let destruct = stat.names.len() > 1 && stat.exprs.len() > 0;
         if destruct {
-            self.append_space("[");
+            self.append("[");
         }
         for (n, name) in stat.names.iter().enumerate() {
             self.append(name);
@@ -246,16 +246,17 @@ impl AstVisitor for Transpiler {
             }
         }
         if destruct {
-            self.space_append_space("]");
+            self.append("]");
         }
+        self.space();
         if stat.exprs.len() > 0 {
             self.append_space("=");
             if destruct {
-                self.append_space("[");
+                self.append("[");
             }
             ast_walker::walk_exprlist(&stat.exprs, self);
             if destruct {
-                self.space_append_space("]");
+                self.append("]");
             }
         }
     }
@@ -280,7 +281,7 @@ impl AstVisitor for Transpiler {
     fn assign_stat(&mut self, stat: &AssignStat) {
         let destruct = stat.left.len() > 1 && stat.right.len() > 1;
         if destruct {
-            self.append_space("[");
+            self.append("[");
         }
         for (n, suffix) in stat.left.iter().enumerate() {
             ast_walker::walk_assinable(suffix, self);
@@ -289,15 +290,15 @@ impl AstVisitor for Transpiler {
             }
         }
         if destruct {
-            self.space_append_space("]");
+            self.append("]");
         }
-        self.append_space("=");
+        self.space_append_space("=");
         if destruct {
-            self.append_space("[");
+            self.append("[");
         }
         ast_walker::walk_exprlist(&stat.right, self);
         if destruct {
-            self.space_append_space("]");
+            self.append("]");
         }
     }
 
@@ -618,6 +619,30 @@ mod test {
         assert_eq!(
             translate("function a(b, c, d) end"),
             "a = function (b, c, d) {\n};\n"
+        )
+    }
+
+    #[test]
+    fn local_define() {
+        assert_eq!(
+            translate("local a, b, c = 1, 2, 3"),
+            "let [a, b, c] = [1, 2, 3];\n"
+        );
+        assert_eq!(
+            translate("local a = 1"),
+            "let a = 1;\n"
+        )
+    }
+
+    #[test]
+    fn assign() {
+        assert_eq!(
+            translate("a, b, c = 1, 2, 3"),
+            "[a, b, c] = [1, 2, 3];\n"
+        );
+        assert_eq!(
+            translate("a = 1"),
+            "a = 1;\n"
         )
     }
 
