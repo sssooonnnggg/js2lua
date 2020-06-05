@@ -119,13 +119,12 @@ impl AstVisitor for Transpiler {
     }
 
     fn begin_while(&mut self, _cond: &Expr) -> bool {
-        self.append_space("while (");
+        self.append("while (");
         false
     }
 
     fn begin_while_block(&mut self, _block: &Block) -> bool {
         self.enter_scope();
-        self.space();
         self.append_inc(") {");
         false
     }
@@ -136,7 +135,6 @@ impl AstVisitor for Transpiler {
 
     fn begin_do_block(&mut self, _block: &Block) -> bool {
         self.enter_scope();
-        self.space();
         self.append_inc("{");
         false
     }
@@ -540,7 +538,26 @@ mod test {
     fn if_else() {
         assert_eq!(
             try_convert("if true then elseif true then else end"),
-            "if (true) {\n} else if (true) {\n};\n"
+            "if (true) {\n\
+            } else if (true) {\n\
+            };\n"
+        )
+    }
+
+    #[test]
+    fn while_block() {
+        assert_eq!(
+            try_convert("while a > 0 do end"),
+            "while (a > 0) {\n\
+            };\n"
+        )
+    }
+
+    #[test]
+    fn do_block() {
+        assert_eq!(
+            try_convert("do end"),
+            "{\n};\n"
         )
     }
 
