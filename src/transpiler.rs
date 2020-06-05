@@ -95,7 +95,6 @@ impl AstVisitor for Transpiler {
     }
 
     fn then(&mut self, _block: &Block) -> bool {
-        self.space();
         self.enter_scope();
         self.append_inc(") {");
         false
@@ -103,7 +102,7 @@ impl AstVisitor for Transpiler {
 
     fn begin_else_if(&mut self, _cond: &Expr) -> bool {
         self.leave_scope();
-        self.append_space("} else if (");
+        self.append("} else if (");
         false
     }
 
@@ -518,7 +517,9 @@ mod test {
             parser.set_debug(true);
             if let Ok(ast) = parser.run(tokens) {
                 let mut writter = Transpiler::new();
-                return writter.run(&ast).to_string();
+                let output = writter.run(&ast).to_string();
+                println!("{}", output);
+                return output;
             }
         }
         unreachable!()
@@ -533,6 +534,14 @@ mod test {
         let mut file = File::create(dst)?;
         file.write_all(output.as_bytes())?;
         Ok(())
+    }
+
+    #[test]
+    fn if_else() {
+        assert_eq!(
+            try_convert("if true then elseif true then else end"),
+            "if (true) {\n} else if (true) {\n};\n"
+        )
     }
 
     #[test]
