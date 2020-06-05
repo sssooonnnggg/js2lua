@@ -205,12 +205,11 @@ impl AstVisitor for Transpiler {
 
     fn until(&mut self) {
         self.leave_scope();
-        self.incline();
-        self.append_space("} while (");
+        self.append("} while (");
     }
 
     fn end_repeat(&mut self) {
-        self.append_inc(");")
+        self.append(")")
     }
 
     fn func(&mut self, funcstat: &FuncStat) {
@@ -594,6 +593,14 @@ mod test {
             try_convert("for a, b in pairs(t) do end"),
             "for (let [a, b] of pairs(t)) {\n\
             };\n"
+        )
+    }
+
+    #[test]
+    fn repeat_block() {
+        assert_eq!(
+            try_convert("repeat until a > 0"),
+            "do {\n} while (a > 0);\n"
         )
     }
 
