@@ -28,7 +28,7 @@ impl Transpiler {
         mem::replace(&mut self.output, String::new())
     }
 
-    pub fn get_expr(&mut self, expr: &Expr) -> String {
+    pub fn expr(&mut self, expr: &Expr) -> String {
         ast_walker::walk_expr(expr, self);
         mem::replace(&mut self.output, String::new())
     }
@@ -144,10 +144,11 @@ impl AstVisitor for Transpiler {
     }
 
     fn for_num(&mut self, fornum: &ForNum) -> bool {
-        let init = Transpiler::new().get_expr(&fornum.init);
-        let limit = Transpiler::new().get_expr(&fornum.limit);
+        let mut helper = Transpiler::new();
+        let init = helper.expr(&fornum.init);
+        let limit = helper.expr(&fornum.limit);
         let step = if let Some(step_expr) = &fornum.step {
-            Transpiler::new().get_expr(step_expr)
+            helper.expr(step_expr)
         } else {
             "1".to_string()
         };
@@ -161,8 +162,28 @@ impl AstVisitor for Transpiler {
         true
     }
 
+    // for a, b in expr => for (let [a, b] of expr)
     fn for_list(&mut self, forlist: &ForList) -> bool {
-        todo!()
+        let destrcut = forlist.vars.len() > 1;
+        self.append_space("for (let");
+        if destrcut {
+            self.append("[");
+        }
+        let mut iter = forlist.vars.iter();
+        if let Some(first_var) = iter.next() {
+            self.append(first_var);
+            while let Some(var) = iter.next() {
+                self.append_space(",");
+                self.append(var);
+            }
+        }
+        if destrcut {
+            self.append("]");
+        }
+        self.space_append_space("of");
+        ast_walker::walk_exprlist(&forlist.exprs, self);
+        self.append(")");
+        true
     }
 
     fn begin_for_block(&mut self, _block: &Block) -> bool {
@@ -555,10 +576,7 @@ mod test {
 
     #[test]
     fn do_block() {
-        assert_eq!(
-            try_convert("do end"),
-            "{\n};\n"
-        )
+        assert_eq!(try_convert("do end"), "{\n};\n")
     }
 
     #[test]
@@ -568,6 +586,15 @@ mod test {
             "for (let i = 1; i <= 10; i += 1) {\n\
             };\n"
         );
+    }
+
+    #[test]
+    fn for_list() {
+        assert_eq!(
+            try_convert("for a, b in pairs(t) do end"),
+            "for (let [a, b] of pairs(t)) {\n\
+            };\n"
+        )
     }
 
     #[test]
