@@ -216,10 +216,10 @@ impl AstVisitor for Transpiler {
         let func_name = &funcstat.func_name;
         let mut fields = func_name.fields.iter();
         if let Some(name) = fields.next() {
-            self.append(name);
             if func_name.fields.len() == 1 && funcstat.func_type == FuncType::Local {
                 self.append_space("let");
             }
+            self.append(name);
             while let Some(name) = fields.next() {
                 self.append(".");
                 self.append(name);
@@ -526,7 +526,7 @@ mod test {
     use std::io::prelude::*;
     use std::path::Path;
 
-    fn try_convert(input: &str) -> String {
+    fn translate(input: &str) -> String {
         let mut lexer = Lexer::new();
         lexer.set_debug(true);
         lexer.set_use_origin_string(true);
@@ -548,7 +548,7 @@ mod test {
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
-        let output = try_convert(&content);
+        let output = translate(&content);
         let mut file = File::create(dst)?;
         file.write_all(output.as_bytes())?;
         Ok(())
@@ -557,7 +557,7 @@ mod test {
     #[test]
     fn if_else() {
         assert_eq!(
-            try_convert("if true then elseif true then else end"),
+            translate("if true then elseif true then else end"),
             "if (true) {\n\
             } else if (true) {\n\
             };\n"
@@ -567,7 +567,7 @@ mod test {
     #[test]
     fn while_block() {
         assert_eq!(
-            try_convert("while a > 0 do end"),
+            translate("while a > 0 do end"),
             "while (a > 0) {\n\
             };\n"
         )
@@ -575,13 +575,13 @@ mod test {
 
     #[test]
     fn do_block() {
-        assert_eq!(try_convert("do end"), "{\n};\n")
+        assert_eq!(translate("do end"), "{\n};\n")
     }
 
     #[test]
     fn for_num() {
         assert_eq!(
-            try_convert("for i = 1,10,1 do end"),
+            translate("for i = 1,10,1 do end"),
             "for (let i = 1; i <= 10; i += 1) {\n\
             };\n"
         );
@@ -590,8 +590,13 @@ mod test {
     #[test]
     fn for_list() {
         assert_eq!(
-            try_convert("for a, b in pairs(t) do end"),
+            translate("for a, b in pairs(t) do end"),
             "for (let [a, b] of pairs(t)) {\n\
+            };\n"
+        );
+        assert_eq!(
+            translate("for a in pairs(t) do end"),
+            "for (let a of pairs(t)) {\n\
             };\n"
         )
     }
@@ -599,8 +604,20 @@ mod test {
     #[test]
     fn repeat_block() {
         assert_eq!(
-            try_convert("repeat until a > 0"),
+            translate("repeat until a > 0"),
             "do {\n} while (a > 0);\n"
+        )
+    }
+
+    #[test]
+    fn func_define() {
+        assert_eq!(
+            translate("local function a(b, c, d) end"),
+            "let a = function (b, c, d) {\n};\n"
+        );
+        assert_eq!(
+            translate("function a(b, c, d) end"),
+            "a = function (b, c, d) {\n};\n"
         )
     }
 
