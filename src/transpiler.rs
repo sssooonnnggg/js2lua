@@ -301,7 +301,7 @@ impl AstVisitor for Transpiler {
     }
 
     fn assign_stat(&mut self, stat: &AssignStat) {
-        let destruct = stat.left.len() > 1 && stat.right.len() > 1;
+        let destruct = stat.left.len() > 1;
         if destruct {
             self.append("[");
         }
