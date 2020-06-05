@@ -3,6 +3,7 @@ use rslua::ast_walker::*;
 use rslua::lexer::Lexer;
 use rslua::parser::Parser;
 use rslua::types::*;
+use std::mem;
 use std::str;
 
 pub struct Transpiler {
@@ -21,10 +22,15 @@ impl Transpiler {
         }
     }
 
-    pub fn run(&mut self, block: &Block) -> &str {
+    pub fn run(&mut self, block: &Block) -> String {
         self.output.clear();
         ast_walker::walk_block(block, self);
-        &self.output
+        mem::replace(&mut self.output, String::new())
+    }
+
+    pub fn get_expr(&mut self, expr: &Expr) -> String {
+        ast_walker::walk_expr(expr, self);
+        mem::replace(&mut self.output, String::new())
     }
 
     fn append(&mut self, content: &str) {
@@ -63,7 +69,7 @@ impl Transpiler {
 
     fn end(&mut self) {
         self.leave_scope();
-        self.append("end");
+        self.append("}");
     }
 
     fn enter_scope(&mut self) {
@@ -80,30 +86,30 @@ impl Transpiler {
 
 impl AstVisitor for Transpiler {
     fn stat_sep(&mut self) {
-        self.incline();
+        self.append_inc(";");
     }
 
     fn begin_if(&mut self, _cond: &Expr) -> bool {
-        self.append_space("if");
+        self.append("if (");
         false
     }
 
     fn then(&mut self, _block: &Block) -> bool {
         self.space();
         self.enter_scope();
-        self.append_inc("then");
+        self.append_inc(") {");
         false
     }
 
     fn begin_else_if(&mut self, _cond: &Expr) -> bool {
         self.leave_scope();
-        self.append_space("elseif");
+        self.append_space("} else if (");
         false
     }
 
     fn begin_else(&mut self, _block: &Block) -> bool {
         self.leave_scope();
-        self.append("else");
+        self.append("} else {");
         self.enter_scope();
         self.incline();
         false
@@ -114,14 +120,14 @@ impl AstVisitor for Transpiler {
     }
 
     fn begin_while(&mut self, _cond: &Expr) -> bool {
-        self.append_space("while");
+        self.append_space("while (");
         false
     }
 
     fn begin_while_block(&mut self, _block: &Block) -> bool {
         self.enter_scope();
         self.space();
-        self.append_inc("do");
+        self.append_inc(") {");
         false
     }
 
@@ -132,7 +138,7 @@ impl AstVisitor for Transpiler {
     fn begin_do_block(&mut self, _block: &Block) -> bool {
         self.enter_scope();
         self.space();
-        self.append_inc("do");
+        self.append_inc("{");
         false
     }
 
@@ -141,27 +147,31 @@ impl AstVisitor for Transpiler {
     }
 
     fn for_num(&mut self, fornum: &ForNum) -> bool {
-        self.append_space("for");
-        self.append(&format!("{} = ", fornum.var));
-        false
+        let init = Transpiler::new().get_expr(&fornum.init);
+        let limit = Transpiler::new().get_expr(&fornum.limit);
+        let step = if let Some(step_expr) = &fornum.step {
+            Transpiler::new().get_expr(step_expr)
+        } else {
+            "1".to_string()
+        };
+        self.append(&format!(
+            "for (let {var} = {init}; {var} <= {limit}; {var} += {step})",
+            var = fornum.var,
+            init = init,
+            limit = limit,
+            step = step
+        ));
+        true
     }
 
     fn for_list(&mut self, forlist: &ForList) -> bool {
-        self.append_space("for");
-        for (n, var) in forlist.vars.iter().enumerate() {
-            self.append(var);
-            if n < forlist.vars.len() - 1 {
-                self.append(", ");
-            }
-        }
-        self.space_append_space("in");
-        false
+        todo!()
     }
 
     fn begin_for_block(&mut self, _block: &Block) -> bool {
         self.enter_scope();
         self.space();
-        self.append_inc("do");
+        self.append_inc("{");
         false
     }
 
@@ -171,57 +181,70 @@ impl AstVisitor for Transpiler {
 
     fn begin_repeat(&mut self, _block: &Block) -> bool {
         self.enter_scope();
-        self.append_inc("repeat");
+        self.append_inc("do {");
         false
     }
 
     fn until(&mut self) {
         self.leave_scope();
         self.incline();
-        self.append_space("until");
+        self.append_space("} while (");
     }
 
     fn end_repeat(&mut self) {
-        self.incline();
+        self.append_inc(");")
     }
 
     fn func(&mut self, funcstat: &FuncStat) {
-        match funcstat.func_type {
-            FuncType::Local => self.append_space("local function"),
-            FuncType::Global => self.append_space("function"),
-        };
         let func_name = &funcstat.func_name;
         let mut fields = func_name.fields.iter();
         if let Some(name) = fields.next() {
             self.append(name);
+            if func_name.fields.len() == 1 && funcstat.func_type == FuncType::Local {
+                self.append_space("let");
+            }
             while let Some(name) = fields.next() {
                 self.append(".");
                 self.append(name);
             }
             if let Some(method) = &func_name.method {
-                self.append(":");
+                self.append(".");
                 self.append(method);
             }
+            self.space_append_space("=");
+            self.append_space("function");
         }
     }
 
     fn local_stat(&mut self, stat: &LocalStat) {
-        self.append_space("local");
+        self.append_space("let");
+        let destruct = stat.names.len() > 1 && stat.exprs.len() > 0;
+        if destruct {
+            self.append_space("[");
+        }
         for (n, name) in stat.names.iter().enumerate() {
             self.append(name);
             if n < stat.names.len() - 1 {
                 self.append(", ");
             }
         }
-        self.space();
+        if destruct {
+            self.space_append_space("]");
+        }
         if stat.exprs.len() > 0 {
             self.append_space("=");
+            if destruct {
+                self.append_space("[");
+            }
             ast_walker::walk_exprlist(&stat.exprs, self);
+            if destruct {
+                self.space_append_space("]");
+            }
         }
     }
 
     fn label_stat(&mut self, stat: &LabelStat) {
-        self.append(&format!("::{}::", stat.label));
+        unimplemented!()
     }
 
     fn ret_stat(&mut self, stat: &RetStat) {
@@ -234,18 +257,31 @@ impl AstVisitor for Transpiler {
     }
 
     fn goto_stat(&mut self, stat: &GotoStat) {
-        self.append(&format!("goto {}", stat.label));
+        unimplemented!()
     }
 
     fn assign_stat(&mut self, stat: &AssignStat) {
+        let destruct = stat.left.len() > 1 && stat.right.len() > 1;
+        if destruct {
+            self.append_space("[");
+        }
         for (n, suffix) in stat.left.iter().enumerate() {
             ast_walker::walk_assinable(suffix, self);
             if n < stat.left.len() - 1 {
                 self.append_space(",");
             }
         }
-        self.space_append_space("=");
+        if destruct {
+            self.space_append_space("]");
+        }
+        self.append_space("=");
+        if destruct {
+            self.append_space("[");
+        }
         ast_walker::walk_exprlist(&stat.right, self);
+        if destruct {
+            self.space_append_space("]");
+        }
     }
 
     fn call_stat(&mut self, stat: &CallStat) {
@@ -261,7 +297,7 @@ impl AstVisitor for Transpiler {
     }
 
     fn nil(&mut self) {
-        self.append("nil");
+        self.append("null");
     }
 
     fn true_(&mut self) {
@@ -309,7 +345,7 @@ impl AstVisitor for Transpiler {
             }
         }
         self.enter_scope();
-        self.append_inc(")");
+        self.append_inc(") {");
         false
     }
 
@@ -343,7 +379,7 @@ impl AstVisitor for Transpiler {
     }
 
     fn field_kv_sep(&mut self) {
-        self.space_append_space("=");
+        self.space_append_space(":");
     }
 
     fn begin_field_key(&mut self, key: &FieldKey) -> bool {
@@ -369,27 +405,27 @@ impl AstVisitor for Transpiler {
 
     fn binop(&mut self, op: BinOp) {
         let string = match op {
-            BinOp::Or => "or",
-            BinOp::And => "and",
-            BinOp::Eq => "==",
-            BinOp::Ne => "~=",
+            BinOp::Or => "||",
+            BinOp::And => "&&",
+            BinOp::Eq => "===",
+            BinOp::Ne => "!==",
             BinOp::Lt => "<",
             BinOp::Gt => ">",
             BinOp::Le => "<=",
             BinOp::Ge => ">=",
             BinOp::BOr => "|",
-            BinOp::BXor => "~",
+            BinOp::BXor => "^",
             BinOp::BAnd => "&",
             BinOp::Shl => "<<",
             BinOp::Shr => ">>",
-            BinOp::Concat => "..",
+            BinOp::Concat => "+",
             BinOp::Add => "+",
             BinOp::Minus => "-",
             BinOp::Mul => "*",
             BinOp::Mod => "%",
             BinOp::Div => "/",
-            BinOp::IDiv => "//",
-            BinOp::Pow => "^",
+            BinOp::IDiv => todo!(),
+            BinOp::Pow => todo!(),
             _ => unreachable!(),
         };
         self.space_append_space(string);
@@ -405,8 +441,8 @@ impl AstVisitor for Transpiler {
         match op {
             UnOp::Minus => self.append("-"),
             UnOp::BNot => self.append("~"),
-            UnOp::Not => self.append_space("not"),
-            UnOp::TLen => self.append("#"),
+            UnOp::Not => self.append_space("!"),
+            UnOp::TLen => todo!(),
             _ => unreachable!(),
         }
     }
@@ -429,7 +465,7 @@ impl AstVisitor for Transpiler {
     }
 
     fn method(&mut self, method: &str) {
-        self.append(":");
+        self.append(".");
         self.append(method);
     }
 
