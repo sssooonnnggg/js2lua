@@ -82,6 +82,12 @@ impl Transpiler {
             self.output.pop();
         }
     }
+
+    fn table_len(&mut self, expr: &Expr) {
+        self.append("table.len(");
+        ast_walker::walk_expr(expr, self);
+        self.append(")");
+    }
 }
 
 impl AstVisitor for Transpiler {
@@ -451,8 +457,14 @@ impl AstVisitor for Transpiler {
 
     fn end_bin_expr(&mut self) {}
 
-    fn begin_un_expr(&mut self, _expr: &UnExpr) -> bool {
-        false
+    fn begin_un_expr(&mut self, expr: &UnExpr) -> bool {
+        match expr.op {
+            UnOp::TLen => {
+                self.table_len(&expr.expr);
+                true
+            }
+            _ => false,
+        }
     }
 
     fn unop(&mut self, op: UnOp) {
@@ -460,7 +472,6 @@ impl AstVisitor for Transpiler {
             UnOp::Minus => self.append("-"),
             UnOp::BNot => self.append("~"),
             UnOp::Not => self.append_space("!"),
-            UnOp::TLen => todo!(),
             _ => unreachable!(),
         }
     }
@@ -604,10 +615,7 @@ mod test {
 
     #[test]
     fn repeat_block() {
-        assert_eq!(
-            translate("repeat until a > 0"),
-            "do {\n} while (a > 0);\n"
-        )
+        assert_eq!(translate("repeat until a > 0"), "do {\n} while (a > 0);\n")
     }
 
     #[test]
@@ -628,21 +636,20 @@ mod test {
             translate("local a, b, c = 1, 2, 3"),
             "let [a, b, c] = [1, 2, 3];\n"
         );
-        assert_eq!(
-            translate("local a = 1"),
-            "let a = 1;\n"
-        )
+        assert_eq!(translate("local a = 1"), "let a = 1;\n")
     }
 
     #[test]
     fn assign() {
+        assert_eq!(translate("a, b, c = 1, 2, 3"), "[a, b, c] = [1, 2, 3];\n");
+        assert_eq!(translate("a = 1"), "a = 1;\n")
+    }
+
+    #[test]
+    fn table_len() {
         assert_eq!(
-            translate("a, b, c = 1, 2, 3"),
-            "[a, b, c] = [1, 2, 3];\n"
-        );
-        assert_eq!(
-            translate("a = 1"),
-            "a = 1;\n"
+            translate("l = #t"),
+            "l = table.len(t);\n"
         )
     }
 
