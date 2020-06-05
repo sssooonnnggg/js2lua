@@ -562,6 +562,15 @@ mod test {
     }
 
     #[test]
+    fn for_num() {
+        assert_eq!(
+            try_convert("for i = 1,10,1 do end"),
+            "for (let i = 1; i <= 10; i += 1) {\n\
+            };\n"
+        );
+    }
+
+    #[test]
     fn lua_to_js() -> std::io::Result<()> {
         let lua_dir: &'static str = "./lua_tests";
         let tmp: &'static str = "./js_output";
