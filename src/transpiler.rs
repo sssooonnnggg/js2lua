@@ -88,6 +88,22 @@ impl Transpiler {
         ast_walker::walk_expr(expr, self);
         self.append(")");
     }
+
+    fn idiv(&mut self, expr: &BinExpr) {
+        self.append("Math.floor(");
+        ast_walker::walk_expr(&expr.left, self);
+        self.space_append_space("/");
+        ast_walker::walk_expr(&expr.right, self);
+        self.append(")");
+    }
+
+    fn pow(&mut self, expr: &BinExpr) {
+        self.append("Math.pow(");
+        ast_walker::walk_expr(&expr.left, self);
+        self.append_space(",");
+        ast_walker::walk_expr(&expr.right, self);
+        self.append(")");
+    }
 }
 
 impl AstVisitor for Transpiler {
@@ -423,8 +439,18 @@ impl AstVisitor for Transpiler {
 
     fn end_rec_field(&mut self) {}
 
-    fn begin_bin_expr(&mut self, _expr: &BinExpr) -> bool {
-        false
+    fn begin_bin_expr(&mut self, expr: &BinExpr) -> bool {
+        match expr.op {
+            BinOp::IDiv => {
+                self.idiv(expr);
+                true
+            }
+            BinOp::Pow => {
+                self.pow(expr);
+                true
+            }
+            _ => false,
+        }
     }
 
     fn binop(&mut self, op: BinOp) {
@@ -448,8 +474,6 @@ impl AstVisitor for Transpiler {
             BinOp::Mul => "*",
             BinOp::Mod => "%",
             BinOp::Div => "/",
-            BinOp::IDiv => todo!(),
-            BinOp::Pow => todo!(),
             _ => unreachable!(),
         };
         self.space_append_space(string);
@@ -647,10 +671,17 @@ mod test {
 
     #[test]
     fn table_len() {
-        assert_eq!(
-            translate("l = #t"),
-            "l = table.len(t);\n"
-        )
+        assert_eq!(translate("l = #t"), "l = table.len(t);\n")
+    }
+
+    #[test]
+    fn idiv() {
+        assert_eq!(translate("i = a // b"), "i = Math.floor(a / b);\n");
+    }
+
+    #[test]
+    fn pow() {
+        assert_eq!(translate("p = a ^ b"), "p = Math.pow(a, b);\n")
     }
 
     #[test]
